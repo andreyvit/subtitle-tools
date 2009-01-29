@@ -1,6 +1,12 @@
 #! /bin/env ruby
 require 'fileutils'
 
+$debug = false
+if ARGV.include? '-d'
+  ARGV -= ['-d']
+  $debug = true
+end
+
 class File
   def gets_skipping_emptylines_and_comments_and_strip
     while x = self.gets
@@ -27,8 +33,8 @@ end
 class TimeRange < Struct.new(:start, :end)
   
   def convert_to_time num, den
-    TimeRange.new((self.start  * 1000 * den / num + 0.5).to_i, 
-                 ((self.end+1) * 1000 * den / num + 0.5).to_i)
+    TimeRange.new((self.start * 1000 * den / num + 0.5).to_i, 
+                  (self.end   * 1000 * den / num + 0.5).to_i)
   end
   
   def to_s
@@ -42,14 +48,14 @@ class TimeRange < Struct.new(:start, :end)
   def apply_operations(added_ranges, deleted_ranges)
     me = self
     added_ranges.each           do |range|
-      $stdout.write "#{me} + #{range}"
+      $stdout.write "#{me} + #{range}" if $debug
       me = me.apply_addition(range)
-      puts " = #{me}"
+      puts " = #{me}" if $debug
     end
     deleted_ranges.reverse.each do |range|
-      $stdout.write "#{me} - #{range}"
+      $stdout.write "#{me} - #{range}" if $debug
       me = me.apply_deletion(range)
-      puts " = #{me}"
+      puts " = #{me}" if $debug
     end
     return me
   end
@@ -134,9 +140,11 @@ def read_data_file data_file
       line = '' if line.strip == '-'
       line.split(',').each do |fragment|
         if fragment =~ /^\s*(\d+)-(\d+)\s*$/
-          range = TimeRange.new($1.to_i, $2.to_i)
+          range = TimeRange.new($1.to_i, $2.to_i + 1)
+        elsif fragment =~ /^\s*(\d+)\+(\d+)\s*$/
+          range = TimeRange.new($1.to_i, $1.to_i + $2.to_i)
         elsif fragment =~ /^\s*(\d+)\s*$/
-          range = TimeRange.new($1.to_i, $1.to_i)
+          range = TimeRange.new($1.to_i, $1.to_i + 1)
         else
           die %Q,invalid skipped frame/range format: "#{fragment}" (alias: #{alias_name}),
         end
