@@ -1,9 +1,11 @@
 #! /bin/env ruby
 require 'fileutils'
 
-class IO
+class File
   def gets_skipping_emptylines_and_comments_and_strip
-    while x = self.gets do return x.strip unless x =~ /^\s*(#|$)/
+    while x = self.gets
+      return x.strip unless x =~ /^\s*(#|$)/
+    end
     return nil
   end
 end
@@ -22,11 +24,15 @@ class Fixnum
   
 end
 
-class Range < Struct.new(:start, :end)
+class TimeRange < Struct.new(:start, :end)
   
   def convert_to_time num, den
-    Range.new((self.start * 1000 * den / num + 0.5).to_i, 
-              (self.end   * 1000 * den / num + 0.5).to_i)
+    TimeRange.new((self.start  * 1000 * den / num + 0.5).to_i, 
+                 ((self.end+1) * 1000 * den / num + 0.5).to_i)
+  end
+  
+  def to_s
+    "[#{self.start}, #{self.end})"
   end
   
   def length
@@ -35,17 +41,26 @@ class Range < Struct.new(:start, :end)
   
   def apply_operations(added_ranges, deleted_ranges)
     me = self
-    added_ranges.each           { |range| me = me.apply_addition(range) }
-    deleted_ranges.reverse.each { |range| me = me.apply_deletion(range) }
+    added_ranges.each           do |range|
+      $stdout.write "#{me} + #{range}"
+      me = me.apply_addition(range)
+      puts " = #{me}"
+    end
+    deleted_ranges.reverse.each do |range|
+      $stdout.write "#{me} - #{range}"
+      me = me.apply_deletion(range)
+      puts " = #{me}"
+    end
+    return me
   end
   
   def apply_addition range
     if self.start >= range.start
       puts "Warning: insertion at start of subtitle at #{self.start.format_timestamp}" if self.start == range.start
-      return Range.new(self.start + range.length, self.end + range.length)
+      return TimeRange.new(self.start + range.length, self.end + range.length)
     elsif self.end >= range.start
       puts "Warning: insertion at end of subtitle starting at #{self.start.format_timestamp}" if self.end == range.start
-      return Range.new(self.start, self.end + range.length)
+      return TimeRange.new(self.start, self.end + range.length)
     else
       return self
     end
@@ -56,7 +71,7 @@ class Range < Struct.new(:start, :end)
     return self if range.start >= self.end                                                       # -500 ml
     len_diff = [self.length, range.length, self.end - range.start, range.end - self.start].min   # 1000 ml
     new_start = [range.start - [0, len_diff].min, self.start].min                                #  300 ml
-    Range.new(new_start, new_start + self.length - [0, len_diff].max)                            #  700 ml
+    TimeRange.new(new_start, new_start + self.length - [0, len_diff].max)                            #  700 ml
     # total: 1500 ml
   end
     
@@ -65,7 +80,7 @@ class Range < Struct.new(:start, :end)
     #   # self    [     ]
     #   # range [         ]
     #   puts "Warning: subtitle removed at #{self.start}..#{self.end}, moving to #{range.start}"
-    #   return Range.new(range.start, range.start)
+    #   return TimeRange.new(range.start, range.start)
     # end
     # if range.start < self.start
     #   # self    [   ]
@@ -74,13 +89,12 @@ class Range < Struct.new(:start, :end)
     # elsif range.end < self.end
     #   # self  [      ]
     #   # range   [  ]
-    #   return Range.new(self.start, self.end - range.length)
+    #   return TimeRange.new(self.start, self.end - range.length)
     # else
     #   # self  [     ]
     #   # range   [     ]
-    #   return Range.new(self.start, range.start)
+    #   return TimeRange.new(self.start, range.start)
     # end
-  end
   
 end
 
@@ -96,7 +110,7 @@ def die s
 end
 
 def parse_timecode h, m, s, milli
-  milli + 1000 * (s.to_i + 60 * (m.to_i + 60 * h.to_i))
+  milli.to_i + 1000 * (s.to_i + 60 * (m.to_i + 60 * h.to_i))
 end
 
 def read_data_file data_file
@@ -113,31 +127,31 @@ def read_data_file data_file
     else
       die %Q,invalid framerate format: "#{framerate_line}",
     end
-    while line = data.gets_skipping_emptylines_and_comments
+    while line = data.gets_skipping_emptylines_and_comments_and_strip
       alias_name, line = line.split(/\s+/, 2)
       first_alias_name ||= alias_name
       ranges = (alias_to_ranges[alias_name.downcase] || [])
       line = '' if line.strip == '-'
       line.split(',').each do |fragment|
         if fragment =~ /^\s*(\d+)-(\d+)\s*$/
-          range = Range.new($1.to_i, $2.to_i)
+          range = TimeRange.new($1.to_i, $2.to_i)
         elsif fragment =~ /^\s*(\d+)\s*$/
-          range = Range.new($1.to_i, $1.to_i)
+          range = TimeRange.new($1.to_i, $1.to_i)
         else
           die %Q,invalid skipped frame/range format: "#{fragment}" (alias: #{alias_name}),
         end
         die %Q,range end is before range start in #{fragment} (alias: #{alias_name}), unless range.start <= range.end
         ranges << range.convert_to_time(framerate_num, framerate_den)
       end
-      die "duplicate starts of ranges for alias #{alias_name}" unless ranges.collect { |r| r.start }.sort.uniq.size != ranges.collect { |r| r.start }.sort.size
-      die "overlapping ranges for alias #{alias_name}" if ranges.adjacent_pairs.any? { |a, b| a.end > b.start }
+      die "duplicate starts of ranges for alias #{alias_name}: #{ranges.collect { |r| r.start }.sort.join(', ')}." if ranges.collect { |r| r.start }.sort.uniq.size != ranges.collect { |r| r.start }.sort.size
       ranges.sort! { |a, b| a.start <=> b.start }
+      die "overlapping ranges for alias #{alias_name}" if ranges.adjacent_pairs.any? { |a, b| a.end > b.start }
       ranges.inject([]) do |sum, range|
-        last_range = sum.first || Range.new(-1, -1)
+        last_range = sum.first || TimeRange.new(-1, -1)
         if last_range.end == range.start
-          return sum[0..-2] + [Range.new(last_range.start, range.end)]
+          sum[0..-2] + [TimeRange.new(last_range.start, range.end)]
         else
-          return sum + [range]
+          sum + [range]
         end
       end
       alias_to_ranges[alias_name.downcase] = ranges
@@ -147,7 +161,7 @@ def read_data_file data_file
 end
 
 begin
-  die "usage: ruby #{File.basename(__FILE__)} data_file input_srt [input_alias]" if ARGV.size < 4
+  die "usage: ruby #{File.basename(__FILE__)} data_file input_srt [input_alias]" if ARGV.size < 2
   
   data_file   = ARGV[0]
   input_file  = ARGV[1]
@@ -168,17 +182,19 @@ begin
   added_ranges = alias_to_ranges[input_alias]
   output_aliases.each do |output_alias|
     output_prefix = if input_file =~ /\.srt$/i then $` else input_file end
-    output_file = "#{output_file}.#{output_alias}.srt"
+    output_file = "#{output_prefix}.#{output_alias}.srt"
     deleted_ranges = alias_to_ranges[output_alias]
     
-    File.open(input_file) do |input|
-      File.open(output_file) do |output|
+    puts "Current Output: #{output_alias} - #{File.basename(output_file)}"
+    
+    File.open(input_file, 'r') do |input|
+      File.open(output_file, 'w') do |output|
         input.each_line do |line|
           if line =~ /^(\d{1,2}):(\d{1,2}):(\d{1,2}),(\d{1,3}) --> (\d{1,2}):(\d{1,2}):(\d{1,2}),(\d{1,3})\s*$/
             start  = parse_timecode $1, $2, $3, $4
             finish = parse_timecode $5, $6, $7, $8
           
-            range = Range.new(start, finish).apply_operations(added_ranges, deleted_ranges)
+            range = TimeRange.new(start, finish).apply_operations(added_ranges, deleted_ranges)
             line = "#{range.start.format_timestamp} --> #{range.end.format_timestamp}\r\n"
           end
           output.write line
