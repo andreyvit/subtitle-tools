@@ -197,8 +197,8 @@ begin
     
     puts "Current Output: #{output_alias} - #{File.basename(output_file)}"
     
-    File.open(input_file, 'r') do |input|
-      File.open(output_file, 'w') do |output|
+    File.open(input_file, 'rb') do |input|
+      File.open(output_file, 'wb') do |output|
         input.each_line do |line|
           if line =~ /^(\d{1,2}):(\d{1,2}):(\d{1,2}),(\d{1,3}) --> (\d{1,2}):(\d{1,2}):(\d{1,2}),(\d{1,3})\s*$/
             start  = parse_timecode $1, $2, $3, $4
