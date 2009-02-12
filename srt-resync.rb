@@ -123,6 +123,7 @@ end
 def read_data_file data_file
   alias_to_ranges = {}
   first_alias_name = nil
+  case_preserved_alias_names = {}
   File.open(data_file) do |data|
     framerate_line = data.gets_skipping_emptylines_and_comments_and_strip
     if framerate_line =~ %r!^(\d+)/(\d+)$!
@@ -136,22 +137,40 @@ def read_data_file data_file
     end
     while line = data.gets_skipping_emptylines_and_comments_and_strip
       alias_name, line = line.split(/\s+/, 2)
-      first_alias_name ||= alias_name
+      case_preserved_alias_names[alias_name.downcase] ||= alias_name
+      first_alias_name ||= alias_name.downcase
       ranges = (alias_to_ranges[alias_name.downcase] || [])
       line ||= ''
       line = '' if line.strip == '-'
       line.split(',').each do |fragment|
-        if fragment =~ /^\s*(\d+)-(\d+)\s*$/
-          range = TimeRange.new($1.to_i, $2.to_i + 1)
-        elsif fragment =~ /^\s*(\d+)\+(\d+)\s*$/
-          range = TimeRange.new($1.to_i, $1.to_i + $2.to_i)
+        ## range notation disabled to avoid confusion (e.g. "4-5" meant "frames 4 and 5" and was equal to "4+2")
+        # if fragment =~ /^\s*(\d+)-(\d+)\s*$/
+        #   range = TimeRange.new($1.to_i, $2.to_i + 1)
+        #   
+        #   die %Q,range end is before range start in #{fragment} (alias: #{alias_name}), unless range.start <= range.end
+        #   ranges << range.convert_to_time(framerate_num, framerate_den)
+        if fragment =~ /^\s*(\d+)([+\d -]+)\s*$/
+          start = $1.to_i
+          trailing = $2.strip
+          until trailing.empty?
+            trailing =~ /^\s*\+(\d+)?/ or
+              die %Q@invalid skipped frame/range format: "#{fragment}", invalid data starts at "#{trailing}" (alias: #{alias_name})@
+            count = ($1 || '1').to_i
+            ranges << TimeRange.new(start, start + count).convert_to_time(framerate_num, framerate_den)
+            start += count
+            trailing = $'
+            while trailing =~ /^\s*\-(\d+)?/
+              count = ($1 || '1').to_i
+              start += count
+              trailing = $'
+            end
+          end
         elsif fragment =~ /^\s*(\d+)\s*$/
           range = TimeRange.new($1.to_i, $1.to_i + 1)
+          ranges << range.convert_to_time(framerate_num, framerate_den)
         else
           die %Q,invalid skipped frame/range format: "#{fragment}" (alias: #{alias_name}),
         end
-        die %Q,range end is before range start in #{fragment} (alias: #{alias_name}), unless range.start <= range.end
-        ranges << range.convert_to_time(framerate_num, framerate_den)
       end
       die "duplicate starts of ranges for alias #{alias_name}: #{ranges.collect { |r| r.start }.sort.join(', ')}." if ranges.collect { |r| r.start }.sort.uniq.size != ranges.collect { |r| r.start }.sort.size
       ranges.sort! { |a, b| a.start <=> b.start }
@@ -167,7 +186,7 @@ def read_data_file data_file
       alias_to_ranges[alias_name.downcase] = ranges
     end
   end
-  return first_alias_name, alias_to_ranges
+  return first_alias_name, alias_to_ranges, case_preserved_alias_names
 end
 
 begin
@@ -180,19 +199,19 @@ begin
   File.file? data_file  or die "data file not found: #{data_file}"
   File.file? input_file or die "input subtitles file not found: #{input_file}"
 
-  first_alias_name, alias_to_ranges = read_data_file(data_file)
+  first_alias_name, alias_to_ranges, case_preserved_alias_names = read_data_file(data_file)
   input_alias ||= first_alias_name
-  alias_to_ranges[input_alias] or die %Q,input alias not found: "#{input_alias}",
-  output_aliases = alias_to_ranges.keys - [input_alias]
+  alias_to_ranges[input_alias.downcase] or die %Q,input alias not found: "#{input_alias}",
+  output_aliases = alias_to_ranges.keys - [input_alias.downcase]
   
   puts "Input:          #{File.basename(input_file)}"
-  puts "Input Alias:    #{input_alias}"
-  puts "Output Aliases: #{output_aliases.join(', ')}"
+  puts "Input Alias:    #{case_preserved_alias_names[input_alias]}"
+  puts "Output Aliases: #{output_aliases.collect { |a| case_preserved_alias_names[a] }.join(', ')}"
 
-  added_ranges = alias_to_ranges[input_alias]
+  added_ranges = alias_to_ranges[input_alias.downcase]
   output_aliases.each do |output_alias|
     output_prefix = if input_file =~ /\.srt$/i then $` else input_file end
-    output_file = "#{output_prefix}.#{output_alias}.srt"
+    output_file = "#{output_prefix}.#{case_preserved_alias_names[output_alias]}.srt"
     deleted_ranges = alias_to_ranges[output_alias]
     
     puts "Current Output: #{output_alias} - #{File.basename(output_file)}"
