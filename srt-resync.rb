@@ -214,7 +214,7 @@ begin
     output_file = "#{output_prefix}.#{case_preserved_alias_names[output_alias]}.srt"
     deleted_ranges = alias_to_ranges[output_alias]
     
-    puts "Current Output: #{output_alias} - #{File.basename(output_file)}"
+    puts "Current Output: #{case_preserved_alias_names[output_alias]} - #{File.basename(output_file)}"
     
     File.open(input_file, 'rb') do |input|
       File.open(output_file, 'wb') do |output|
