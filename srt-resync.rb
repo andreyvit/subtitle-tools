@@ -106,6 +106,7 @@ end
 
 class Array
   def adjacent_pairs
+    return [] if self.empty?
     self[0..-2].zip(self[1..-1])
   end
 end
@@ -137,6 +138,7 @@ def read_data_file data_file
       alias_name, line = line.split(/\s+/, 2)
       first_alias_name ||= alias_name
       ranges = (alias_to_ranges[alias_name.downcase] || [])
+      line ||= ''
       line = '' if line.strip == '-'
       line.split(',').each do |fragment|
         if fragment =~ /^\s*(\d+)-(\d+)\s*$/
