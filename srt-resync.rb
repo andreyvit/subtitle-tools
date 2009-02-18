@@ -205,7 +205,7 @@ begin
   output_aliases = alias_to_ranges.keys - [input_alias.downcase]
   
   puts "Input:          #{File.basename(input_file)}"
-  puts "Input Alias:    #{case_preserved_alias_names[input_alias]}"
+  puts "Input Alias:    #{case_preserved_alias_names[input_alias.downcase]}"
   puts "Output Aliases: #{output_aliases.collect { |a| case_preserved_alias_names[a] }.join(', ')}"
 
   added_ranges = alias_to_ranges[input_alias.downcase]
