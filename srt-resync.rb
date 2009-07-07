@@ -7,12 +7,22 @@ if ARGV.include? '-d'
   $debug = true
 end
 
-class File
+class IO
   def gets_skipping_emptylines_and_comments_and_strip
     while x = self.gets
       return x.strip unless x =~ /^\s*(#|$)/
     end
     return nil
+  end
+end
+
+class File
+  def self.open_or_stdin(file_name, &block)
+    if file_name == '-'
+      block.call($stdin)
+    else
+      File.open(file_name, &block)
+    end
   end
 end
 
@@ -124,7 +134,7 @@ def read_data_file data_file
   alias_to_ranges = {}
   first_alias_name = nil
   case_preserved_alias_names = {}
-  File.open(data_file) do |data|
+  File.open_or_stdin(data_file) do |data|
     framerate_line = data.gets_skipping_emptylines_and_comments_and_strip
     if framerate_line =~ %r!^(\d+)/(\d+)$!
       framerate_num = $1.to_i
@@ -196,7 +206,7 @@ begin
   input_file  = ARGV[1]
   input_alias = ARGV[2]
 
-  File.file? data_file  or die "data file not found: #{data_file}"
+  (data_file == '-' or File.file? data_file) or die "data file not found: #{data_file}"
   File.file? input_file or die "input subtitles file not found: #{input_file}"
 
   first_alias_name, alias_to_ranges, case_preserved_alias_names = read_data_file(data_file)
