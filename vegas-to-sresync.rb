@@ -98,8 +98,10 @@ begin
     exit 1
   end
   
+  max_len = if subtitle_names.empty? then tracks.values.collect { |t| t.file_name[common_prefix .. -common_suffix-1] } else subtitle_names end.collect { |name| name.length }.max
+  
   puts "#{frame_rate_num}/#{frame_rate_den}"
   puts
-  tracks.values.each_with_index { |t, index| puts "#{if subtitle_names.empty? then t.file_name[common_prefix .. -common_suffix-1] else subtitle_names[index] end} " + t.skipped_ranges.collect { |r| [(r[0]*1.0*frame_rate_num/frame_rate_den/1000).round, (r[1]*1.0*frame_rate_num/frame_rate_den/1000).round] }.collect { |b,e| "#{b}+#{e-b}"}.join(", ") }
+  tracks.values.each_with_index { |t, index| puts sprintf("%-#{max_len+1}s", if subtitle_names.empty? then t.file_name[common_prefix .. -common_suffix-1] else subtitle_names[index] end) + " " + t.skipped_ranges.collect { |r| [(r[0]*1.0*frame_rate_num/frame_rate_den/1000).round, (r[1]*1.0*frame_rate_num/frame_rate_den/1000).round] }.collect { |b,e| "#{b}+#{e-b}"}.join(", ") }
 
 end
