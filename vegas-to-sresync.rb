@@ -2,7 +2,8 @@
 #
 # == Synopsis
 #
-# vegas-to-sresync: converts Sony Vegas exported projects (in CSV) into srt-resync.rb input file format
+# vegas-to-sresync: converts Sony Vegas EDL text files (exported projects in CSV format)
+# into srt-resync.rb input file format
 #
 # == Usage
 #
