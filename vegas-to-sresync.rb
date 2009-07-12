@@ -102,6 +102,6 @@ begin
   
   puts "#{frame_rate_num}/#{frame_rate_den}"
   puts
-  tracks.values.each_with_index { |t, index| puts sprintf("%-#{max_len+1}s", if subtitle_names.empty? then t.file_name[common_prefix .. -common_suffix-1] else subtitle_names[index] end) + " " + t.skipped_ranges.collect { |r| [(r[0]*1.0*frame_rate_num/frame_rate_den/1000).round, (r[1]*1.0*frame_rate_num/frame_rate_den/1000).round] }.collect { |b,e| "#{b}+#{e-b}"}.join(", ") }
+  tracks.values.each_with_index { |t, index| puts sprintf("%-#{max_len+1}s", if subtitle_names.empty? then t.file_name[common_prefix .. -common_suffix-1] else subtitle_names[index] end) + " " + if t.skipped_ranges.empty? then "0+0" else t.skipped_ranges.collect { |r| [(r[0]*1.0*frame_rate_num/frame_rate_den/1000).round, (r[1]*1.0*frame_rate_num/frame_rate_den/1000).round] }.collect { |b,e| "#{b}+#{e-b}"}.join(", ") end }
 
 end
